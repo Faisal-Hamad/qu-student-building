@@ -185,3 +185,17 @@ export const activityLog = pgTable(
   },
   (t) => [index('activity_created').on(t.createdAt)],
 )
+
+export const maintenancePhotos = pgTable(
+  'maintenance_photos',
+  {
+    id: serial('id').primaryKey(),
+    requestId: integer('request_id').notNull().references(() => maintenanceRequests.id, { onDelete: 'cascade' }),
+    storageKey: text('storage_key').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    uploadedBy: integer('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('mp_request').on(t.requestId)],
+)

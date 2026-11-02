@@ -24,6 +24,14 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   return data as T
 }
 
+// Multipart upload (photos). The browser sets the multipart content-type itself.
+export async function apiForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: 'POST', headers: { 'x-requested-with': 'fetch' }, credentials: 'same-origin', body: form })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, (data as { error?: string } | null)?.error ?? 'تعذر الاتصال بالخادم')
+  return data as T
+}
+
 export function useApi<T>(path: string | null) {
   const [data, setData] = useState<T | undefined>()
   const [error, setError] = useState<string | null>(null)

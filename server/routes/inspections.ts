@@ -1,10 +1,11 @@
-import { and, eq } from 'drizzle-orm'
+import { and, count, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getDb, schema } from '../db/index.js'
 import { can, fail, inScope, requirePerm, requireUser, type AppEnv } from '../auth.js'
 import { buildingOfTarget, getSettings, logActivity, saveSettings } from '../common.js'
 import { mailConfigured } from '../mail.js'
+import { storageConfigured } from '../storage.js'
 import { rankings } from '../../shared/scoring.js'
 import type { Housing, Inspection, PublicResults, Section } from '../../shared/types.js'
 
@@ -107,7 +108,15 @@ export const inspectionRoutes = new Hono<AppEnv>()
 export const settingsRoutes = new Hono<AppEnv>()
   .get('/', async (c) => {
     requireUser(c, 'staff')
-    return c.json({ ...(await getSettings()), mailConfigured: mailConfigured() })
+    const db = await getDb()
+    const [usage] = await db.select({ bytes: sql<number>`coalesce(sum(${schema.maintenancePhotos.size}), 0)::bigint`, n: count() }).from(schema.maintenancePhotos)
+    return c.json({
+      ...(await getSettings()),
+      mailConfigured: mailConfigured(),
+      storageConfigured: storageConfigured(),
+      photoBytes: Number(usage.bytes),
+      photoCount: usage.n,
+    })
   })
   .put('/criteria', async (c) => {
     requirePerm(c, 'inspections.criteria')
@@ -120,7 +129,7 @@ export const settingsRoutes = new Hono<AppEnv>()
     requirePerm(c, 'settings.manage')
     const n = z.number().int().min(0).max(1_000_000)
     const body = z
-      .object({ roomPrizeCount: n, roomPrizeAmount: n, wingPrizeCount: n, wingPrizeAmount: n, backupEmail: z.union([z.literal(''), z.string().email()]) })
+      .object({ roomPrizeCount: n, roomPrizeAmount: n, wingPrizeCount: n, wingPrizeAmount: n, backupEmail: z.union([z.literal(''), z.string().email()]), photoRetentionMonths: z.number().int().min(0).max(120) })
       .partial()
       .parse(await c.req.json())
     await saveSettings({ ...(await getSettings()), ...body })

@@ -1,5 +1,33 @@
 import writeXlsxFile from 'write-excel-file'
 
+// Shrinks a phone photo to JPEG before upload; lowers quality until it fits the size limit.
+export async function compressImage(file: File, maxSide: number, maxBytes: number): Promise<Blob> {
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image()
+      i.onload = () => resolve(i)
+      i.onerror = () => reject(new Error('صيغة الصورة غير مدعومة، صوّرها بالكاميرا مباشرة'))
+      i.src = url
+    })
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(img.width * scale)
+    canvas.height = Math.round(img.height * scale)
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+    for (const q of [0.75, 0.6, 0.45, 0.3]) {
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', q))
+      if (blob && blob.size <= maxBytes) return blob
+    }
+    throw new Error('الصورة كبيرة جداً')
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+export const formatBytes = (n: number) =>
+  n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(2)} جيجا` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} ميجا` : `${Math.ceil(n / 1024)} كيلو`
+
 export function download(filename: string, content: string | Blob, type = 'application/octet-stream') {
   const blob = content instanceof Blob ? content : new Blob([content], { type })
   const a = document.createElement('a')

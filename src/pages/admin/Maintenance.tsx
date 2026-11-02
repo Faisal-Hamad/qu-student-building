@@ -4,6 +4,7 @@ import { api, useApi } from '../../api'
 import { useAuth } from '../../auth'
 import { Empty, ErrorText, Field, Loading, Modal, PageTitle, Pager, StatusChip, useAction } from '../../components/ui'
 import { IconDownload } from '../../components/Icons'
+import { PhotoGallery } from '../../components/Photos'
 import { exportExcel, formatDate, timeAgo } from '../../lib/util'
 import { LOCATIONS, PROBLEM_TYPES, STATUSES, type Status } from '../../../shared/constants'
 import type { Housing, MaintenanceEvent, MaintenanceRequest, StaffRow } from '../../../shared/types'
@@ -126,7 +127,7 @@ export default function Maintenance() {
 
 function RequestDetail({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const { can } = useAuth()
-  const q = useApi<{ request: MaintenanceRequest; events: MaintenanceEvent[] }>(`/maintenance/${id}`)
+  const q = useApi<{ request: MaintenanceRequest; events: MaintenanceEvent[]; photos: { id: number }[] }>(`/maintenance/${id}`)
   const staff = useApi<StaffRow[]>(can('maintenance.assign') ? '/staff' : null)
   const [note, setNote] = useState('')
   const { busy, error, run } = useAction()
@@ -158,6 +159,8 @@ function RequestDetail({ id, onClose, onChanged }: { id: number; onClose: () => 
               <p className="mt-0.5 whitespace-pre-wrap">{r.description}</p>
             </div>
           </div>
+
+          <PhotoGallery ids={q.data!.photos} />
 
           {can('maintenance.assign') && (
             <Field label="الفني المسؤول">

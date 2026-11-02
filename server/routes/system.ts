@@ -7,6 +7,7 @@ import { getDb, schema } from '../db/index.js'
 import { fail, requirePerm, requireUser, sha256, type AppEnv } from '../auth.js'
 import { getSettings, logActivity } from '../common.js'
 import { mailConfigured, sendMail } from '../mail.js'
+import { deleteObject } from '../storage.js'
 import { LOCATIONS, PROBLEM_TYPES, STATUSES } from '../../shared/constants.js'
 
 export const notificationRoutes = new Hono<AppEnv>()
@@ -113,7 +114,27 @@ export const cronRoutes = new Hono<AppEnv>().get('/daily', async (c) => {
   ])
 
   const s = await getSettings()
-  if (!s.backupEmail || !mailConfigured()) return c.json({ ok: true, emailed: false })
+  let photosDeleted = 0
+  if (s.photoRetentionMonths > 0) {
+    // Only finished requests lose their photos; open ones always keep their evidence.
+    const old = await db
+      .select({ id: schema.maintenancePhotos.id, key: schema.maintenancePhotos.storageKey })
+      .from(schema.maintenancePhotos)
+      .innerJoin(schema.maintenanceRequests, eq(schema.maintenanceRequests.id, schema.maintenancePhotos.requestId))
+      .where(
+        and(
+          inArray(schema.maintenanceRequests.status, ['done', 'rejected']),
+          lt(schema.maintenanceRequests.updatedAt, sql`now() - make_interval(months => ${s.photoRetentionMonths}::int)`),
+        ),
+      )
+      .limit(2000)
+    for (const p of old) {
+      await deleteObject(p.key)
+      await db.delete(schema.maintenancePhotos).where(eq(schema.maintenancePhotos.id, p.id))
+      photosDeleted++
+    }
+  }
+  if (!s.backupEmail || !mailConfigured()) return c.json({ ok: true, emailed: false, photosDeleted })
   const snap = await snapshot()
   const day = snap.exportedAt.slice(0, 10)
   await sendMail({
@@ -125,5 +146,5 @@ export const cronRoutes = new Hono<AppEnv>().get('/daily', async (c) => {
       { filename: `maintenance-${day}.xlsx`, content: await requestsWorkbook(snap) },
     ],
   })
-  return c.json({ ok: true, emailed: true })
+  return c.json({ ok: true, emailed: true, photosDeleted })
 })

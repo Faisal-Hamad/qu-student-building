@@ -38,3 +38,11 @@ export const STANDARD_LAYOUT = { floors: 3, wingsPerFloor: 4, firstWingRooms: 6,
 
 export const MIN_PASSWORD = 8
 export const DUPLICATE_WINDOW_HOURS = 24
+
+// Photos are required on maintenance requests; the phone shrinks them before upload.
+export const MIN_PHOTOS = 1
+export const MAX_PHOTOS = 3
+export const MAX_PHOTO_BYTES = 1_200_000
+export const PHOTO_MAX_SIDE = 1280
+// Cloudflare R2 free tier, used to show how full storage is.
+export const FREE_STORAGE_BYTES = 10 * 1024 ** 3

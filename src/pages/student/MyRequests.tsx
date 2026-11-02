@@ -4,6 +4,7 @@ import { useApi } from '../../api'
 import { useAuth } from '../../auth'
 import { Empty, Loading, Modal, PageTitle, Pager, StatusChip } from '../../components/ui'
 import { IconPlus } from '../../components/Icons'
+import { PhotoGallery } from '../../components/Photos'
 import { formatDate, timeAgo } from '../../lib/util'
 import { LOCATIONS, PROBLEM_TYPES, STATUSES } from '../../../shared/constants'
 import type { MaintenanceEvent, MaintenanceRequest } from '../../../shared/types'
@@ -51,7 +52,7 @@ export default function MyRequests() {
 }
 
 function Detail({ id, onClose }: { id: number; onClose: () => void }) {
-  const q = useApi<{ request: MaintenanceRequest; events: MaintenanceEvent[] }>(`/maintenance/${id}`)
+  const q = useApi<{ request: MaintenanceRequest; events: MaintenanceEvent[]; photos: { id: number }[] }>(`/maintenance/${id}`)
   const r = q.data?.request
   return (
     <Modal title={r ? `البلاغ ${r.sr}` : 'البلاغ'} onClose={onClose}>
@@ -62,6 +63,7 @@ function Detail({ id, onClose }: { id: number; onClose: () => void }) {
             <div className="text-ink-2">{r.locationLabel}</div>
             <p className="whitespace-pre-wrap pt-1">{r.description}</p>
           </div>
+          <PhotoGallery ids={q.data!.photos} />
           <ol className="space-y-2 border-s-2 border-line ps-4">
             {q.data!.events.filter((e) => e.action !== 'assigned').map((e) => (
               <li key={e.id}>

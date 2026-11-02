@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { api } from '../../api'
+import { apiForm } from '../../api'
 import { useAuth } from '../../auth'
 import { ErrorText, Field, PageTitle, useAction } from '../../components/ui'
-import { IconCheck, IconQr } from '../../components/Icons'
-import { LOCATIONS, PROBLEM_TYPES, type Location, type ProblemType } from '../../../shared/constants'
+import { IconCamera, IconCheck, IconQr, IconUpload, IconX } from '../../components/Icons'
+import { compressImage } from '../../lib/util'
+import { LOCATIONS, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_MAX_SIDE, PROBLEM_TYPES, type Location, type ProblemType } from '../../../shared/constants'
 
 export default function NewRequest() {
   const { me, can } = useAuth()
@@ -16,6 +17,8 @@ export default function NewRequest() {
   const [problemType, setProblemType] = useState<ProblemType | null>(null)
   const [description, setDescription] = useState('')
   const [done, setDone] = useState<string | null>(null)
+  const [photos, setPhotos] = useState<{ blob: Blob; url: string }[]>([])
+  const [processing, setProcessing] = useState(false)
   const { busy, error, setError, run } = useAction()
   const room = me?.room
 
@@ -38,11 +41,34 @@ export default function NewRequest() {
       </div>
     )
 
+  const addPhotos = async (files: FileList | null) => {
+    if (!files?.length) return
+    setProcessing(true)
+    setError(null)
+    try {
+      const room = MAX_PHOTOS - photos.length
+      const blobs = await Promise.all([...files].slice(0, room).map((f) => compressImage(f, PHOTO_MAX_SIDE, MAX_PHOTO_BYTES)))
+      setPhotos((ps) => [...ps, ...blobs.map((blob) => ({ blob, url: URL.createObjectURL(blob) }))])
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!problemType) return setError('اختر نوع المشكلة')
+    if (!photos.length) return setError('أرفق صورة للمشكلة')
     run(async () => {
-      const r = await api<{ sr: string }>('/maintenance', { body: { location, problemType, description, qrWingId: qrWing } })
+      const fd = new FormData()
+      fd.append('location', location)
+      fd.append('problemType', problemType)
+      fd.append('description', description)
+      if (qrWing) fd.append('qrWingId', String(qrWing))
+      photos.forEach((p, i) => fd.append('photos', p.blob, `photo-${i + 1}.jpg`))
+      const r = await apiForm<{ sr: string }>('/maintenance', fd)
+      photos.forEach((p) => URL.revokeObjectURL(p.url))
       setDone(r.sr)
     })
   }
@@ -81,12 +107,46 @@ export default function NewRequest() {
               ))}
             </div>
           </Field>
+          <div>
+            <div className="mb-1 text-sm font-medium text-ink-2">صور المشكلة <span className="text-rose-600">*</span> <span className="text-xs font-normal text-ink-3">(صورة على الأقل، حتى {MAX_PHOTOS})</span></div>
+            <div className="grid max-w-md grid-cols-3 gap-2">
+              {photos.map((p, i) => (
+                <div key={p.url} className="relative aspect-square">
+                  <img src={p.url} alt="" className="size-full rounded-xl object-cover ring-1 ring-line" />
+                  <button
+                    type="button"
+                    onClick={() => (URL.revokeObjectURL(p.url), setPhotos((ps) => ps.filter((_, j) => j !== i)))}
+                    className="absolute -top-1.5 -start-1.5 grid size-7 place-items-center rounded-full bg-white text-rose-600 shadow ring-1 ring-line"
+                    aria-label="حذف الصورة"
+                  >
+                    <IconX width={14} />
+                  </button>
+                </div>
+              ))}
+              {photos.length < MAX_PHOTOS && (
+                <>
+                  <label className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-brand-200 bg-brand-50 text-sm font-medium text-brand-700 ${processing ? 'opacity-50' : ''}`}>
+                    <IconCamera />
+                    {processing ? 'جارِ التجهيز…' : 'تصوير'}
+                    <input type="file" accept="image/*" capture="environment" hidden disabled={processing} onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} />
+                  </label>
+                  {photos.length === 0 && (
+                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-sm font-medium text-ink-2">
+                      <IconUpload />
+                      من الصور
+                      <input type="file" accept="image/*" multiple hidden disabled={processing} onChange={(e) => (addPhotos(e.target.files), (e.target.value = ''))} />
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
           <Field label="وصف مختصر للمشكلة">
             <textarea className="input min-h-28" required minLength={5} maxLength={1000} placeholder="يرجى وصف المشكلة بالتفصيل…" value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           <ErrorText>{error}</ErrorText>
           <div className="flex gap-2">
-            <button className="btn-primary flex-1 py-3 text-base" disabled={busy || wrongWing}>{busy ? 'جارِ الإرسال…' : 'إرسال'}</button>
+            <button className="btn-primary flex-1 py-3 text-base" disabled={busy || wrongWing || processing}>{busy ? 'جارِ رفع البلاغ والصور…' : 'إرسال'}</button>
             <button type="button" className="btn-ghost" onClick={() => navigate(-1)}>إلغاء</button>
           </div>
         </div>

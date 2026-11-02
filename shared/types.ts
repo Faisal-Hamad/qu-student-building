@@ -24,6 +24,8 @@ export interface Settings {
   publicResults: boolean
   currentRound: number
   backupEmail: string
+  // Photos of finished requests older than this many months are deleted daily; 0 keeps them forever.
+  photoRetentionMonths: number
   roomTemplate: Section[]
   wingTemplate: Section[]
 }

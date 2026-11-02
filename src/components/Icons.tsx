@@ -31,4 +31,5 @@ export const IconList = base('M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'
 export const IconQr = base('M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h2v2h-2zm4 0h2v2h-2zm-4 4h2v2h-2zm4 0h2v2h-2z')
 export const IconMenu = base('M4 6h16M4 12h16M4 18h16')
 export const IconMail = base('M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm-1 1 9 7 9-7')
+export const IconCamera = base('M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm8 9a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z')
 export const IconKey = base('M15 7a3 3 0 1 1 0 .01M21 2l-9.6 9.6a5.5 5.5 0 1 0 3 3L16 13l2 2 2-2-2-2 1-1 2 2 1-1-3-3z')

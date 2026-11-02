@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, useApi } from '../../api'
 import { useAuth } from '../../auth'
-import { ConfirmButton, ErrorText, Field, Loading, PageTitle, useAction } from '../../components/ui'
+import { ConfirmButton, ErrorText, Field, Loading, PageTitle, Progress, useAction } from '../../components/ui'
 import { IconCheck, IconDownload, IconPlus, IconTrash } from '../../components/Icons'
-import { download, sar } from '../../lib/util'
+import { download, formatBytes, sar } from '../../lib/util'
+import { FREE_STORAGE_BYTES } from '../../../shared/constants'
 import type { Section, Settings } from '../../../shared/types'
 
-type S = Settings & { mailConfigured: boolean }
+type S = Settings & { mailConfigured: boolean; storageConfigured: boolean; photoBytes: number; photoCount: number }
 
 function Panel({ title, sub, children }: { title: string; sub?: ReactNode; children: ReactNode }) {
   return (
@@ -29,6 +30,7 @@ export default function SettingsPage() {
       {can('results.publish') && <Publish s={q.data} reload={q.reload} />}
       {can('inspections.criteria') && <Criteria s={q.data} reload={q.reload} />}
       {can('settings.manage') && <Rounds s={q.data} reload={q.reload} />}
+      {can('settings.manage') && <Storage s={q.data} reload={q.reload} />}
       {(can('settings.backup') || can('settings.manage')) && <Backup s={q.data} reload={q.reload} />}
     </>
   )
@@ -94,13 +96,43 @@ function Rounds({ s, reload }: { s: S; reload: () => void }) {
   )
 }
 
+function Storage({ s, reload }: { s: S; reload: () => void }) {
+  const [months, setMonths] = useState(s.photoRetentionMonths)
+  const { busy, error, run } = useAction()
+  const pct = (s.photoBytes / FREE_STORAGE_BYTES) * 100
+  return (
+    <Panel title="صور البلاغات" sub="الصور محفوظة في Cloudflare R2 (المساحة المجانية 10 جيجا) ولا يراها إلا صاحب البلاغ والموظف المختص.">
+      <div className="space-y-3">
+        {!s.storageConfigured && <p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-rose-200">تخزين الصور غير مفعل، فلن يستطيع الطلاب رفع البلاغات. أضف إعدادات R2 في Vercel.</p>}
+        <div>
+          <div className="mb-1 flex justify-between text-sm">
+            <span>{s.photoCount} صورة · {formatBytes(s.photoBytes)}</span>
+            <span className="text-ink-3">{pct.toFixed(1)}٪ من 10 جيجا</span>
+          </div>
+          <Progress value={pct} />
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="حذف صور البلاغات المنجزة والمرفوضة بعد" hint="الحذف يومي وتلقائي. البلاغ نفسه وسجله يبقون، والبلاغات المفتوحة لا تُحذف صورها أبداً.">
+            <select className="input w-56" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+              <option value={0}>لا تحذف أبداً</option>
+              {[3, 6, 12, 24].map((m) => <option key={m} value={m}>{m} شهر</option>)}
+            </select>
+          </Field>
+          <button className="btn-primary" disabled={busy || months === s.photoRetentionMonths} onClick={() => run(async () => (await api('/settings/prizes', { method: 'PUT', body: { photoRetentionMonths: months } }), reload()))}>حفظ</button>
+        </div>
+        <ErrorText>{error}</ErrorText>
+      </div>
+    </Panel>
+  )
+}
+
 function Backup({ s, reload }: { s: S; reload: () => void }) {
   const { can } = useAuth()
   const [email, setEmail] = useState(s.backupEmail)
   const [saved, setSaved] = useState(false)
   const { busy, error, run } = useAction()
   return (
-    <Panel title="النسخ الاحتياطي" sub="نسخة يومية تلقائية تُرسل بالبريد (JSON كامل + Excel للبلاغات)، ويمكنك تنزيل نسخة في أي وقت.">
+    <Panel title="النسخ الاحتياطي" sub="نسخة يومية تلقائية تُرسل بالبريد (JSON كامل + Excel للبلاغات)، ويمكنك تنزيل نسخة في أي وقت. الصور نفسها لا تدخل في النسخة لأنها محفوظة في R2.">
       <div className="space-y-3">
         {!s.mailConfigured && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">خدمة البريد غير مفعلة بعد، فلن تُرسل النسخة اليومية ولا روابط التفعيل. أضف إعدادات SMTP في Vercel.</p>}
         {can('settings.manage') && (

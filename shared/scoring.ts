@@ -161,6 +161,7 @@ export const defaultSettings = (): Settings => ({
   publicResults: false,
   currentRound: 1,
   backupEmail: '',
+  photoRetentionMonths: 0,
   roomTemplate: defaultRoomTemplate(),
   wingTemplate: defaultWingTemplate(),
 })

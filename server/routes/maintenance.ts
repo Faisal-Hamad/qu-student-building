@@ -1,11 +1,13 @@
 import { and, count, desc, eq, gt, ilike, inArray, ne, or, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
+import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { getDb, schema, type DB } from '../db/index.js'
 import { can, fail, inScope, rateLimit, requirePerm, requireUser, type AppEnv, type AuthUser } from '../auth.js'
 import { logActivity, notifyStaff, notifyUser } from '../common.js'
-import { DUPLICATE_WINDOW_HOURS, LOCATIONS, PROBLEM_TYPES, STATUSES, type Status } from '../../shared/constants.js'
+import { deleteObject, getObject, putObject, sniffImage, storageConfigured } from '../storage.js'
+import { DUPLICATE_WINDOW_HOURS, LOCATIONS, MAX_PHOTO_BYTES, MAX_PHOTOS, MIN_PHOTOS, PROBLEM_TYPES, STATUSES, type Status } from '../../shared/constants.js'
 import type { MaintenanceEvent, MaintenanceRequest } from '../../shared/types.js'
 
 const m = schema.maintenanceRequests
@@ -121,7 +123,28 @@ export const maintenanceRoutes = new Hono<AppEnv>()
       .leftJoin(schema.users, eq(schema.users.id, schema.maintenanceEvents.actorId))
       .where(eq(schema.maintenanceEvents.requestId, row.id))
       .orderBy(schema.maintenanceEvents.id)
-    return c.json({ request: strip(row), events: events as MaintenanceEvent[] })
+    const photos = await db
+      .select({ id: schema.maintenancePhotos.id })
+      .from(schema.maintenancePhotos)
+      .where(eq(schema.maintenancePhotos.requestId, row.id))
+      .orderBy(schema.maintenancePhotos.id)
+    return c.json({ request: strip(row), events: events as MaintenanceEvent[], photos })
+  })
+
+  // Photos are private: served through the API after the same visibility check as the request.
+  .get('/photos/:photoId', async (c) => {
+    const user = requireUser(c)
+    const db = await getDb()
+    const [photo] = await db.select().from(schema.maintenancePhotos).where(eq(schema.maintenancePhotos.id, id.parse(c.req.param('photoId'))))
+    if (!photo) fail(404, 'الصورة غير موجودة')
+    await loadVisible(user, photo.requestId)
+    const bytes = await getObject(photo.storageKey)
+    if (!bytes) fail(404, 'الصورة غير موجودة')
+    return c.body(bytes.buffer as ArrayBuffer, 200, {
+      'Content-Type': photo.contentType,
+      'Cache-Control': 'private, max-age=86400',
+      'Content-Disposition': 'inline',
+    })
   })
 
   .post('/', async (c) => {
@@ -129,14 +152,28 @@ export const maintenanceRoutes = new Hono<AppEnv>()
     if (!can(user, 'portal.maintenance_create')) fail(403, 'ليس لديك صلاحية رفع البلاغات')
     if (user.requestsBlocked) fail(403, 'تم إيقاف استقبال البلاغات من حسابك، راجع إدارة السكن')
     if (!user.room) fail(400, 'لا توجد غرفة مسجلة لحسابك، راجع إدارة السكن')
+    if (!storageConfigured()) fail(503, 'تخزين الصور غير مفعل حالياً، راجع إدارة السكن')
+    // Multipart form: text fields plus 1–3 photos (already shrunk on the phone).
+    const form = await c.req.parseBody({ all: true })
     const body = z
       .object({
-        location: z.enum(Object.keys(LOCATIONS) as [keyof typeof LOCATIONS, ...(keyof typeof LOCATIONS)[]]),
-        problemType: z.enum(Object.keys(PROBLEM_TYPES) as [keyof typeof PROBLEM_TYPES, ...(keyof typeof PROBLEM_TYPES)[]]),
+        location: z.enum(Object.keys(LOCATIONS) as [keyof typeof LOCATIONS, ...(keyof typeof LOCATIONS)[]], { message: 'اختر مكان المشكلة' }),
+        problemType: z.enum(Object.keys(PROBLEM_TYPES) as [keyof typeof PROBLEM_TYPES, ...(keyof typeof PROBLEM_TYPES)[]], { message: 'اختر نوع المشكلة' }),
         description: z.string().trim().min(5, 'اكتب وصفاً مختصراً للمشكلة').max(1000),
-        qrWingId: z.number().int().positive().optional(),
+        qrWingId: z.coerce.number().int().positive().optional(),
       })
-      .parse(await c.req.json())
+      .parse({ location: form.location, problemType: form.problemType, description: form.description, qrWingId: form.qrWingId || undefined })
+    const files = ([] as unknown[]).concat(form.photos ?? []).filter((f): f is File => f instanceof File)
+    if (files.length < MIN_PHOTOS) fail(400, 'أرفق صورة للمشكلة')
+    if (files.length > MAX_PHOTOS) fail(400, `الحد الأقصى ${MAX_PHOTOS} صور`)
+    const photos: { bytes: Uint8Array; type: string }[] = []
+    for (const f of files) {
+      if (f.size > MAX_PHOTO_BYTES) fail(400, 'حجم الصورة كبير')
+      const bytes = new Uint8Array(await f.arrayBuffer())
+      const type = sniffImage(bytes)
+      if (!type) fail(400, 'الملف المرفق ليس صورة')
+      photos.push({ bytes, type })
+    }
     if (body.qrWingId && body.qrWingId !== user.room.wingId) fail(400, 'هذا الباركود لجناح آخر غير جناحك')
     await rateLimit(`mr:${user.id}`, 10, 86400)
 
@@ -161,6 +198,23 @@ export const maintenanceRoutes = new Hono<AppEnv>()
       .values({ studentId: user.id, roomId, locationLabel, location: body.location, problemType: body.problemType, description: body.description })
       .returning({ id: m.id, sr: m.sr })
       .catch(() => fail(409, 'لديك بلاغ قائم لنفس المشكلة، يرجى الانتظار حتى الإنجاز'))
+    // Photos are required, so a failed upload removes the request rather than leaving it without evidence.
+    const keys: string[] = []
+    try {
+      for (const p of photos) {
+        const key = `requests/${row.id}/${randomUUID()}.${p.type.split('/')[1]}`
+        await putObject(key, p.bytes, p.type)
+        keys.push(key)
+      }
+      await db.insert(schema.maintenancePhotos).values(
+        photos.map((p, i) => ({ requestId: row.id, storageKey: keys[i], contentType: p.type, size: p.bytes.length, uploadedBy: user.id })),
+      )
+    } catch (e) {
+      console.error(e)
+      await Promise.allSettled(keys.map(deleteObject))
+      await db.delete(m).where(eq(m.id, row.id))
+      fail(503, 'تعذر رفع الصور، حاول مرة ثانية')
+    }
     await db.insert(schema.maintenanceEvents).values({ requestId: row.id, actorId: user.id, action: 'created', toStatus: 'new' })
 
     // Rule 1: notify the responsible staff (in-app).
@@ -226,6 +280,8 @@ export const maintenanceRoutes = new Hono<AppEnv>()
     const user = requirePerm(c, 'maintenance.delete')
     const row = await loadVisible(user, id.parse(c.req.param('id')))
     const db = await getDb()
+    const photos = await db.select({ key: schema.maintenancePhotos.storageKey }).from(schema.maintenancePhotos).where(eq(schema.maintenancePhotos.requestId, row.id))
+    await Promise.allSettled(photos.map((p) => deleteObject(p.key)))
     await db.delete(m).where(eq(m.id, row.id))
     await logActivity(c, 'maintenance.deleted', { requestId: row.id, sr: row.sr })
     return c.json({ ok: true })
