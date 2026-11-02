@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless'
+import { HTTPException } from 'hono/http-exception'
 import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http'
 import * as schema from './schema.js'
 
@@ -17,6 +18,9 @@ export function getDb(): Promise<DB> {
       const url = process.env.DATABASE_URL
       if (url) {
         db = drizzle(neon(url), { schema })
+      } else if (process.env.VERCEL) {
+        ready = undefined
+        throw new HTTPException(503, { message: 'قاعدة البيانات غير مربوطة: اربط Neon من Storage في Vercel ثم أعد النشر' })
       } else {
         const { PGlite } = await import('@electric-sql/pglite')
         const { drizzle: drizzlePglite } = await import('drizzle-orm/pglite')
