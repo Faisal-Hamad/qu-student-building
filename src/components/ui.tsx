@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { round1 } from '../../shared/scoring'
 import { STATUSES, STATUS_TONE, type Status } from '../../shared/constants'
-import { IconX } from './Icons'
+import { IconChevron, IconX } from './Icons'
 
 export function scoreTone(p: number) {
   if (p >= 85) return 'text-emerald-700 bg-emerald-50 ring-emerald-200'
@@ -35,6 +36,22 @@ export function PageTitle({ title, sub, actions }: { title: string; sub?: ReactN
       </div>
       {actions && <div className="no-print flex flex-wrap gap-2">{actions}</div>}
     </div>
+  )
+}
+
+// Back to the previous page; when the page was opened directly (notification, QR, shared link)
+// there is no in-app history, so it goes to the section's main page instead of leaving the site.
+export function BackLink({ fallback, label = 'رجوع', onClick }: { fallback: string; label?: string; onClick?: () => void }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return (
+    <button
+      type="button"
+      onClick={onClick ?? (() => (location.key === 'default' ? navigate(fallback) : navigate(-1)))}
+      className="no-print mb-3 inline-flex items-center gap-1 rounded-lg py-1 text-sm font-medium text-ink-2 hover:text-brand-700"
+    >
+      <IconChevron className="rotate-180" width={16} height={16} /> {label}
+    </button>
   )
 }
 

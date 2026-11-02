@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api, useApi } from '../../api'
 import { useAuth } from '../../auth'
-import { ConfirmButton, ErrorText, Loading, scoreTone, useAction } from '../../components/ui'
-import { IconAlert, IconChevron, IconTrash } from '../../components/Icons'
+import { BackLink, ConfirmButton, ErrorText, Loading, scoreTone, useAction } from '../../components/ui'
+import { IconAlert, IconTrash } from '../../components/Icons'
 import { formatDate } from '../../lib/util'
 import { useHousing } from '../../lib/housing'
 import { round1, scoreInspection } from '../../../shared/scoring'
@@ -64,9 +64,7 @@ function InspectForm({ type, id, existing, settings, housing }: { type: TargetTy
 
   return (
     <div className="pb-28">
-      <Link to="/admin/inspections" className="mb-3 inline-flex items-center gap-1 text-sm text-ink-3">
-        <IconChevron className="rotate-180" width={16} /> رجوع للتفتيش
-      </Link>
+      <BackLink fallback="/admin/inspections" label="رجوع للتفتيش" />
 
       <div className="card mb-4 p-4">
         <div className="flex items-start gap-3">

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, useApi } from '../../api'
 import { useAuth } from '../../auth'
-import { ConfirmButton, ErrorText, Field, Loading, PageTitle, useAction } from '../../components/ui'
+import { BackLink, ConfirmButton, ErrorText, Field, Loading, PageTitle, useAction } from '../../components/ui'
 import { IconCheck, IconChevron, IconPlus, IconX } from '../../components/Icons'
 import { PERMISSION_GROUPS } from '../../../shared/permissions'
 import type { Role, UserKind } from '../../../shared/types'
@@ -78,7 +78,8 @@ function RoleEditor({ role, onDone }: { role: Role | { kind: UserKind }; onDone:
 
   return (
     <>
-      <PageTitle title={existing ? 'تعديل الصلاحية' : 'إضافة صلاحية'} sub={role.kind === 'staff' ? 'صلاحية موظفين' : 'صلاحية طلاب'} actions={<button className="btn-ghost" onClick={onDone}>رجوع</button>} />
+      <BackLink fallback="/admin/roles" label="رجوع للصلاحيات" onClick={onDone} />
+      <PageTitle title={existing ? 'تعديل الصلاحية' : 'إضافة صلاحية'} sub={role.kind === 'staff' ? 'صلاحية موظفين' : 'صلاحية طلاب'} />
 
       <div className="card mb-4 grid gap-3 p-4 sm:grid-cols-2">
         <Field label="الاسم بالعربي *"><input className="input" value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="مثال: مشرف مبنى" /></Field>

@@ -12,6 +12,8 @@ export default function Housing() {
   const q = useApi<H>('/housing')
   const [open, setOpen] = useState<number | null>(null)
   const [count, setCount] = useState(15)
+  const [newName, setNewName] = useState('')
+  const [newStandard, setNewStandard] = useState(true)
   const { busy, error, run } = useAction()
   const manage = can('housing.manage')
   const call = (path: string, method: string, body?: unknown) => run(async () => (await api(path, { method, body }), q.reload()))
@@ -39,6 +41,29 @@ export default function Housing() {
         </div>
       )}
 
+      {manage && (
+        <div className="card mb-4 flex flex-wrap items-end gap-3 p-4">
+          <div className="min-w-60 flex-1">
+            <div className="font-bold">إضافة مبنى واحد</div>
+            <p className="text-xs text-ink-3">باسم تختاره، بالهيكل القياسي أو فاضي تضيف أجنحته وغرفه بنفسك</p>
+          </div>
+          <input className="input w-48" placeholder="اسم المبنى، مثال: مبنى 16" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="اسم المبنى" />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4 accent-brand-700" checked={newStandard} onChange={(e) => setNewStandard(e.target.checked)} />
+            بالهيكل القياسي
+          </label>
+          <button
+            className="btn-primary"
+            disabled={busy || !newName.trim()}
+            onClick={() => run(async () => (await api('/housing/buildings', { method: 'POST', body: { name: newName.trim(), standard: newStandard } }), setNewName(''), q.reload()))}
+          >
+            <IconPlus width={16} /> إضافة مبنى
+          </button>
+        </div>
+      )}
+
+      {h.buildings.length > 0 && <p className="mb-3 text-sm text-ink-3">اضغط «الأجنحة والغرف» على أي مبنى لعرض أجنحته وإضافة جناح أو غرفة أو حذفها.</p>}
+
       <div className="space-y-3">
         {h.buildings.map((b) => {
           const wings = h.wings.filter((w) => w.buildingId === b.id)
@@ -52,7 +77,7 @@ export default function Housing() {
                   <b className="px-1">{b.name}</b>
                 )}
                 <span className="text-sm text-ink-3">{wings.length} جناح · {roomCount} غرفة</span>
-                <button className="btn-ghost ms-auto px-3 py-1.5" onClick={() => setOpen(open === b.id ? null : b.id)}>{open === b.id ? 'إخفاء' : 'الأجنحة'}</button>
+                <button className="btn-ghost ms-auto px-3 py-1.5" onClick={() => setOpen(open === b.id ? null : b.id)}>{open === b.id ? 'إخفاء' : 'الأجنحة والغرف'}</button>
                 {manage && <ConfirmButton className="btn-danger px-3 py-1.5" onConfirm={() => call(`/housing/buildings/${b.id}`, 'DELETE')}><IconTrash width={16} /></ConfirmButton>}
               </div>
 

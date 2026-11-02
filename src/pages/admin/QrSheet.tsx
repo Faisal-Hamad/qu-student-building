@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { useHousing } from '../../lib/housing'
-import { Loading, PageTitle } from '../../components/ui'
+import { BackLink, Loading, PageTitle } from '../../components/ui'
 import { IconPrint } from '../../components/Icons'
 import { LOCATIONS, type Location } from '../../../shared/constants'
 
@@ -25,6 +25,7 @@ export default function QrSheet() {
 
   return (
     <>
+      <BackLink fallback="/admin/housing" label="رجوع للمباني والغرف" />
       <PageTitle title={`باركود ${w.name} — ${w.location}`} sub="اطبع الصفحة والصق كل باركود في مكانه" actions={<button className="btn-primary" onClick={() => window.print()}><IconPrint width={16} /> طباعة</button>} />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {(Object.keys(LOCATIONS) as Location[]).map((loc) => (

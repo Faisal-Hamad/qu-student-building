@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiForm } from '../../api'
 import { useAuth } from '../../auth'
-import { ErrorText, Field, PageTitle, useAction } from '../../components/ui'
+import { BackLink, ErrorText, Field, PageTitle, useAction } from '../../components/ui'
 import { IconCamera, IconCheck, IconQr, IconUpload, IconX } from '../../components/Icons'
 import { compressImage } from '../../lib/util'
 import { LOCATIONS, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_MAX_SIDE, PROBLEM_TYPES, type Location, type ProblemType } from '../../../shared/constants'
@@ -75,6 +75,7 @@ export default function NewRequest() {
 
   return (
     <>
+      <BackLink fallback="/student" />
       <PageTitle title="بلاغ صيانة جديد" />
       {qrWing && (
         <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-sm ring-1 ${wrongWing ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-brand-50 text-brand-800 ring-brand-200'}`}>
