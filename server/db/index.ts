@@ -15,7 +15,8 @@ export function getDb(): Promise<DB> {
   if (db) return Promise.resolve(db)
   if (!ready) {
     ready = (async () => {
-      const url = process.env.DATABASE_URL
+      // The Vercel–Neon integration names variables after the chosen prefix, so accept its common spellings.
+      const url = process.env.DATABASE_URL ?? process.env.DATABASE_POSTGRES_URL ?? process.env.POSTGRES_URL
       if (url) {
         db = drizzle(neon(url), { schema })
       } else if (process.env.VERCEL) {
